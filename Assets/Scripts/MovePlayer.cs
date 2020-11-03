@@ -11,13 +11,18 @@ public class MovePlayer : MonoBehaviour
     Animator animator;
     Rigidbody rigidbody;
     Vector3 moveDir;
-    public float groundedRaycastThreshold = 0.01f; 
+    public float groundedRaycastThreshold = 0.01f;
+    public Transform enemiesContainer;
+    List<Transform> enemies;
     // Start is called before the first frame update
     void Start()
     {
         camTransform = Camera.main.transform;
         animator = GetComponent<Animator>();
         rigidbody = GetComponent<Rigidbody>();
+        enemies = new List<Transform>();
+        for (int i = 0; i < enemiesContainer.childCount; i++)
+            enemies.Add(enemiesContainer.GetChild(i));
     }
 
     // Update is called once per frame
@@ -47,8 +52,22 @@ public class MovePlayer : MonoBehaviour
 
     private void HandleJump()
     {
-        Ray ray = new Ray(transform.position + Vector3.up * groundedRaycastThreshold, Vector3.down);
-        if (Physics.Raycast(ray, 2 * groundedRaycastThreshold))
+        bool midair = true;
+        for (float rayOffsetX = -1f; rayOffsetX <= 1f; rayOffsetX += 1f)
+        {
+            for (float rayOffsetZ = -1f; rayOffsetZ <= 1f; rayOffsetZ += 1f)
+            {
+                Vector3 rayOffset = new Vector3(rayOffsetX, 0, rayOffsetZ).normalized * 0.5f;
+                Ray ray = new Ray(transform.position + rayOffset + Vector3.up * groundedRaycastThreshold, Vector3.down);
+                if (Physics.Raycast(ray, 2 * groundedRaycastThreshold))
+                {
+                    midair = false;
+                    break;
+                }
+            }
+        }
+
+        if (!midair)
         {
             animator.SetBool("midair", false);
             animator.applyRootMotion = true;
@@ -64,6 +83,7 @@ public class MovePlayer : MonoBehaviour
             animator.applyRootMotion = false;
             animator.SetBool("midair", true);
         }
+
     }
     void ComputeAnimatorParams( )
     {
@@ -82,28 +102,56 @@ public class MovePlayer : MonoBehaviour
             return;
         //transform.position += moveDir * Time.deltaTime * movementSpeed; //hardcoded movement
         float velY = rigidbody.velocity.y;
-        rigidbody.velocity = animator.deltaPosition / Time.deltaTime;
+        Vector3 deltaPosition = animator.deltaPosition.magnitude * moveDir;
+        rigidbody.velocity = deltaPosition / Time.deltaTime;
         rigidbody.velocity = new Vector3(rigidbody.velocity.x, velY, rigidbody.velocity.z);
     }
 
-    void ApplyRootRotation( )
+    void ApplyRootRotation()
     {
         if (animator.GetBool("midair"))
             return;
 
+        Vector3 D = GetClosestEnemyOrientation();
+
         if (
-            (transform.forward - moveDir).magnitude > 0.001f &&
-            (transform.forward + moveDir).magnitude > 0.001f
+            (transform.forward - D).magnitude > 0.001f &&
+            (transform.forward + D).magnitude > 0.001f
            )
         {
-            float theta = Mathf.Acos(Vector3.Dot(transform.forward, moveDir));
+            float theta = Mathf.Acos(Vector3.Dot(transform.forward, D));
             theta *= Mathf.Rad2Deg;
-            Vector3 axis = Vector3.Cross(transform.forward, moveDir);
+            Vector3 axis = Vector3.Cross(transform.forward, D);
             transform.rotation = Quaternion.AngleAxis(theta * Time.deltaTime * rotSpeed, axis) * transform.rotation;
         }
-        if ((transform.forward + moveDir).magnitude < 0.001f)
+        if ((transform.forward + D).magnitude < 0.001f)
         {
             transform.rotation = Quaternion.AngleAxis(2f, Vector3.up) * transform.rotation;
         }
+    }
+
+    private Vector3 GetClosestEnemyOrientation()
+    {
+        Vector3 D = moveDir;
+        float minDist = 999999f;
+        int closestEnemyIndex = -1;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            float dist = Vector3.Distance(transform.position, enemies[i].position);
+            if (dist < 4f && dist < minDist)
+            {
+                minDist = dist;
+                closestEnemyIndex = i;
+            }
+        }
+
+        if (closestEnemyIndex != -1)
+        {
+            D = enemies[closestEnemyIndex].position - transform.position;
+            D.y = 0;
+            D = D.normalized;
+        }
+
+        return D;
     }
 }
