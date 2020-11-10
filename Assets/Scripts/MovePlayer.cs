@@ -7,7 +7,14 @@ public class MovePlayer : MonoBehaviour
     public float movementSpeed = 1f;
     public float rotSpeed = 10f;
     public float jumpPower = 5f;
+    public float weaponToggleAnimSpeed = 10f;
+    public float aimingResponsiveness = 10f;
     Transform camTransform;
+    Transform rightHand;
+    Transform chestBone;
+    public Transform weaponHandle;
+    public Transform projectilePrefab;
+    Transform weapon;
     Animator animator;
     Rigidbody rigidbody;
     Vector3 moveDir;
@@ -23,6 +30,10 @@ public class MovePlayer : MonoBehaviour
         enemies = new List<Transform>();
         for (int i = 0; i < enemiesContainer.childCount; i++)
             enemies.Add(enemiesContainer.GetChild(i));
+
+        rightHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+        chestBone = animator.GetBoneTransform(HumanBodyBones.Chest);
+        weapon = weaponHandle.GetChild(0);
     }
 
     // Update is called once per frame
@@ -34,6 +45,44 @@ public class MovePlayer : MonoBehaviour
         ComputeAnimatorParams();
         HandleJump();
         HandleAttack();
+    }
+    private void LateUpdate()
+    {
+        HandleWeaponBehaviour();
+        
+    }
+    private void HandleWeaponBehaviour()
+    {
+        float armsLayerWeight = animator.GetLayerWeight(1);
+        float newLayerWeight;
+        if (Input.GetButton("Fire2"))
+            newLayerWeight = Mathf.Lerp(armsLayerWeight, 1f, Time.deltaTime * weaponToggleAnimSpeed);
+        else
+            newLayerWeight = Mathf.Lerp(armsLayerWeight, 0f, Time.deltaTime * weaponToggleAnimSpeed);
+
+        animator.SetLayerWeight(1, newLayerWeight);
+        animator.SetBool("aiming", newLayerWeight > .9f);
+        if (animator.GetBool("aiming"))
+        {
+            Quaternion lookAtRotation = Quaternion.FromToRotation(weapon.right, camTransform.forward);
+            lookAtRotation.ToAngleAxis(out float angle, out Vector3 axis);
+            angle *= .5f;
+            if (Vector3.Dot(weapon.right, camTransform.forward) < .99f)
+                chestBone.rotation = Quaternion.AngleAxis(angle, axis) * chestBone.rotation;
+            weaponHandle.gameObject.SetActive(true);
+            weaponHandle.transform.position = rightHand.position;
+            weaponHandle.transform.rotation = rightHand.rotation;
+            if (Input.GetButtonDown("Fire1"))
+            {
+                GameObject go = GameObject.Instantiate(projectilePrefab.gameObject);
+                go.transform.rotation = weapon.rotation;
+                go.transform.position = weapon.position + weapon.transform.right * .4f;
+            }
+        }
+        else
+        {
+            weaponHandle.gameObject.SetActive(false);
+        }
     }
     private void HandleAttack()
     {
@@ -113,6 +162,7 @@ public class MovePlayer : MonoBehaviour
             return;
 
         Vector3 D = GetClosestEnemyOrientation();
+        D = GetAimingOrientation(ref D);
 
         if (
             (transform.forward - D).magnitude > 0.001f &&
@@ -130,6 +180,16 @@ public class MovePlayer : MonoBehaviour
         }
     }
 
+    private Vector3 GetAimingOrientation(ref Vector3 D)
+    {
+        if (animator.GetBool("aiming"))
+        {
+            D = camTransform.forward;
+            D.y = 0f;
+            D = D.normalized;
+        }
+        return D;
+    }
     private Vector3 GetClosestEnemyOrientation()
     {
         Vector3 D = moveDir;
