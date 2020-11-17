@@ -64,11 +64,9 @@ public class MovePlayer : MonoBehaviour
         animator.SetBool("aiming", newLayerWeight > .9f);
         if (animator.GetBool("aiming"))
         {
-            Quaternion lookAtRotation = Quaternion.FromToRotation(weapon.right, camTransform.forward);
-            lookAtRotation.ToAngleAxis(out float angle, out Vector3 axis);
-            angle *= .5f;
-            if (Vector3.Dot(weapon.right, camTransform.forward) < .99f)
-                chestBone.rotation = Quaternion.AngleAxis(angle, axis) * chestBone.rotation;
+            Quaternion alignWeapon2camFwd = Quaternion.FromToRotation(rightHand.right, camTransform.forward);
+            chestBone.rotation = alignWeapon2camFwd * chestBone.rotation;
+
             weaponHandle.gameObject.SetActive(true);
             weaponHandle.transform.position = rightHand.position;
             weaponHandle.transform.rotation = rightHand.rotation;
